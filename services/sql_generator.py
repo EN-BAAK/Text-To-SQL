@@ -1,5 +1,6 @@
 from llm.client import client
-from prompts.sql import build_schema_linking_prompt, build_sql_prompt
+from llm.models import DeepSeek
+from prompts.sql import build_schema_linking_prompt, build_sql_prompt, review_sql_prompt
 from services.helpers import clean_selection_tables, clean_sql_output
 
 def llm_model_response(prompt, model):
@@ -23,3 +24,9 @@ def llm_selection_schema(question, schema, model):
     response = llm_model_response(prompt, model)
 
     return clean_selection_tables(response)
+
+def llm_review_sql(question, schema, sql, model=DeepSeek):
+    prompt = review_sql_prompt(question, schema, sql)
+    response = llm_model_response(prompt, model)
+
+    return clean_sql_output(response)

@@ -45,3 +45,30 @@ def build_schema_linking_prompt(question, schema):
         - Do NOT include explanations
         - Output ONLY valid JSON
         """
+
+def review_sql_prompt(question, schema, sql):
+    return f"""
+        You are an expert SQL reviewer.
+
+        Your task is to verify whether the SQL query correctly answers the question.
+
+        Question:
+        {question}
+
+        Schema:
+        {schema}
+
+        SQL:
+        {sql}
+
+        Instructions:
+        - If the SQL is correct, return it unchanged
+        - If the SQL is incorrect, fix it
+        - Ensure correct columns and tables
+        - Ensure proper JOINs if needed
+        - Do NOT explain anything
+        - Output ONLY the SQL query
+        - Output must be in a single line
+
+        SQL:
+        """

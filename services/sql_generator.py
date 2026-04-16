@@ -1,6 +1,6 @@
 from llm.client import client
 from prompts.sql import build_schema_linking_prompt, build_sql_prompt
-from services.helpers import clean_selection_tables
+from services.helpers import clean_selection_tables, clean_sql_output
 
 def llm_model_response(prompt, model):
     response = client.chat.completions.create(
@@ -13,7 +13,10 @@ def llm_model_response(prompt, model):
 
 def generate_sql(question, schema, model):
     prompt = build_sql_prompt(question, schema)
-    return llm_model_response(prompt, model)
+    raw =  llm_model_response(prompt, model)
+
+    return clean_sql_output(raw)
+
 
 def llm_selection_schema(question, schema, model):
     prompt = build_schema_linking_prompt(question, schema)

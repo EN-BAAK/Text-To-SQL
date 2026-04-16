@@ -1,36 +1,6 @@
-import sqlite3
 import re
-
-from services.tables import print_execution_results
-
-database_files_path = "./spider_data/spider_data/database"
-
-SQL_KEYWORDS = {
-    "select", "from", "where", "join", "inner", "left", "right",
-    "group", "order", "by", "having", "insert", "update", "delete",
-    "count", "max", "min", "avg", "sum"
-}
-
-def execute_query(sql, db):
-    db_path = f"{database_files_path}/{db}/{db}.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(sql)
-        result = cursor.fetchall()
-        conn.close()
-        return set(result)
-    except:
-        conn.close()
-        return None
-
-def extract_sql_keywords(sql):
-    sql = sql.lower()
-    words = re.findall(r"\b\w+\b", sql)
-    return set([w for w in words if w in SQL_KEYWORDS])
-
+from services.helpers import extract_sql_keywords, is_safe_sql
+from services.tables import execute_query, print_execution_results
 
 def keyword_similarity(pred_sql, gold_sql):
     pred_keys = extract_sql_keywords(pred_sql)
@@ -44,42 +14,57 @@ def keyword_similarity(pred_sql, gold_sql):
 
     return len(intersection) / len(union)
 
-def validate_syntax(sql, db):
-    db_path = f"{database_files_path}/{db}/{db}.sqlite"
-
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute(sql)
-        conn.close()
-        return True
-    except:
-        conn.close()
-        return False
-
 def validate_execution(pred_sql, gold_sql, db):
-    pred_result = execute_query(pred_sql, db)
-    gold_result = execute_query(gold_sql, db)
-
-    if pred_result is None or gold_result is None:
-        return False
-
-    is_match = pred_result == gold_result
+    pred = execute_query(pred_sql, db)
+    gold = execute_query(gold_sql, db)
 
     return {
-        "is_match": is_match,
-        "pred_result": pred_result,
-        "gold_result": gold_result
+        "is_match": False if not pred["success"] or not gold["success"] else pred["result"] == gold["result"],
+        "pred_result": pred["result"],
+        "gold_result": gold["result"],
+        "error": pred["error"] or gold["error"]
     }
 
 def main_validator(pred_sql, gold_sql, db):
-    syntax_valid = validate_syntax(pred_sql, db)
-    execution_match = validate_execution(pred_sql, gold_sql, db)
+    is_safe, reason = is_safe_sql(pred_sql)
+    if not is_safe:
+        print("\n🚫 Unsafe SQL detected!")
+        print("Reason:", reason)
+
+        return {
+            "syntax_valid": False,
+            "execution_success": False,
+            "execution_match": False,
+            "keyword_score": 0.0,
+            "error": reason,
+            "pred_result": None,
+            "gold_result": None
+        }
+
+    execution = validate_execution(pred_sql, gold_sql, db)
     keyword_score = keyword_similarity(pred_sql, gold_sql)
 
-    print_execution_results(execution_match["pred_result"], execution_match["gold_result"])
-
-    return {
-        "syntax_valid": syntax_valid,
-        "execution_match": execution_match["is_match"],
-        "keyword_score": keyword_score
+    result = {
+        "syntax_valid": execution.get("error") is None,
+        "execution_success": False,
+        "execution_match": False,
+        "keyword_score": keyword_score,
+        "error": execution.get("error"),
+        "pred_result": execution.get("pred_result"),
+        "gold_result": execution.get("gold_result")
     }
+
+    if result["pred_result"] is not None and result["gold_result"] is not None:
+        result["execution_success"] = True
+        result["execution_match"] = execution.get("is_match", False)
+
+    if result["execution_success"]:
+        print_execution_results(
+            result["pred_result"],
+            result["gold_result"]
+        )
+    else:
+        print("\n⚠️ Execution failed")
+        print("Error:", result["error"])
+
+    return result

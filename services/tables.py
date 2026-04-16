@@ -1,7 +1,9 @@
 import json
+import sqlite3
 
 tables_file = "./spider_data/spider_data/tables.json"
 training_data="./spider_data/spider_data/train_spider.json"
+database_files_path = "./spider_data/spider_data/database"
 
 def map_type(col_type):
     if col_type.lower() in ["text", "varchar", "char"]:
@@ -87,3 +89,48 @@ def print_execution_results(pred_result, gold_result):
     print(f"➕ Extra rows: {len(extra)}")
 
     print("="*80 + "\n")
+
+def execute_query(sql, db):
+    db_path = f"{database_files_path}/{db}/{db}.sqlite"
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql)
+        result = cursor.fetchall()
+        conn.close()
+
+        return {
+            "success": True,
+            "result": set(result),
+            "error": None,
+            "type": None
+        }
+
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return {
+            "success": False,
+            "result": None,
+            "error": str(e),
+            "type": "operational"
+        }
+
+    except sqlite3.ProgrammingError as e:
+        conn.close()
+        return {
+            "success": False,
+            "result": None,
+            "error": str(e),
+            "type": "programming"
+        }
+
+    except Exception as e:
+        conn.close()
+        return {
+            "success": False,
+            "result": None,
+            "error": str(e),
+            "type": "unknown"
+        }

@@ -2,7 +2,7 @@ from services.sql_generator import llm_selection_schema
 from services.tables import build_schema_from_llm, get_schema
 from llm.models import DeepSeek
 
-def select_schema(question, db_id):
+def select_schema(question, db_id, model=DeepSeek):
     db_schema = get_schema(db_id)
 
     table_names = db_schema["table_names_original"]
@@ -20,5 +20,5 @@ def select_schema(question, db_id):
         is_pk = idx in primary_keys
         table_columns[table_id].append((col_name, col_type, is_pk))
 
-    selected = llm_selection_schema(question, db_schema, DeepSeek)
+    selected = llm_selection_schema(question, db_schema, model)
     return build_schema_from_llm(selected, db_schema)

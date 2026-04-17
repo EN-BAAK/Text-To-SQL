@@ -1,7 +1,7 @@
 from agents.schema import select_schema
 from agents.sql import generate_sql_from_agents
-from agents.validator import main_validator
-from services.tables import get_training_data, get_schema
+from services.sql_generator import llm_debug_sql
+from services.tables import execute_query, get_training_data, get_schema
 import asyncio
 
 async def run_pipeline(example):
@@ -26,6 +26,7 @@ async def run_pipeline(example):
         full_schema = get_schema(db_id)
         schema = str(full_schema)
 
+    print("\n📦 Table:\n", db_id)
     print("\n📦 SCHEMA:\n", schema)
 
     try:
@@ -42,21 +43,44 @@ async def run_pipeline(example):
     print("\n🧾 GENERATED SQL:\n", sql)
     print("\n🧾 GOLD SQL:\n", gold_sql)
 
-    try:
-        result = await asyncio.to_thread(main_validator, sql, gold_sql, db_id)
-    except Exception as e:
-        print("\n💥 Validator crashed!")
-        print("Error:", e)
+    max_debug_rounds = 2
+    result = None
 
-        result = {
-            "syntax_valid": False,
-            "execution_success": False,
-            "execution_match": False,
-            "keyword_score": 0,
-            "error": str(e)
-        }
+    for i in range(max_debug_rounds + 1):
+        print(f"\n⚙️ Execution attempt {i+1}")
 
-    return result
+        exec_result = await asyncio.to_thread(execute_query, sql, db_id)
+
+        if exec_result["success"]:
+            print("✅ Execution success")
+            result = exec_result
+            break
+
+        print("❌ Execution failed")
+        print("Error:", exec_result["error"])
+
+        if i == max_debug_rounds:
+            result = exec_result
+            break
+
+        print("🛠️ Debugging SQL...")
+
+        new_sql = await asyncio.to_thread(llm_debug_sql,question,schema,sql,exec_result["error"])
+
+        if not new_sql or new_sql == sql:
+            print("⚠️ Debugger did not improve SQL")
+            result = exec_result
+            break
+
+        sql = new_sql
+        print("🔁 New SQL:\n", sql)
+
+    return {
+        "final_sql": sql,
+        "execution_success": result["success"],
+        "error": result["error"],
+        "result": result["result"]
+    }
 
 async def main():
     spider_data = get_training_data()
